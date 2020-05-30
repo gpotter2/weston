@@ -407,13 +407,16 @@ input_panel_setup(struct desktop_shell *shell)
 
 	shell->show_input_panel_listener.notify = show_input_panels;
 	wl_signal_add(&ec->show_input_panel_signal,
-		      &shell->show_input_panel_listener);
-	shell->hide_input_panel_listener.notify = hide_input_panels;
-	wl_signal_add(&ec->hide_input_panel_signal,
-		      &shell->hide_input_panel_listener);
-	shell->update_input_panel_listener.notify = update_input_panels;
-	wl_signal_add(&ec->update_input_panel_signal,
-		      &shell->update_input_panel_listener);
+			  &shell->show_input_panel_listener);
+
+	if (!shell->rail) {
+		shell->hide_input_panel_listener.notify = hide_input_panels;
+		wl_signal_add(&ec->hide_input_panel_signal,
+				  &shell->hide_input_panel_listener);
+		shell->update_input_panel_listener.notify = update_input_panels;
+		wl_signal_add(&ec->update_input_panel_signal,
+				  &shell->update_input_panel_listener);
+	}
 
 	wl_list_init(&shell->input_panel.surfaces);
 

@@ -127,7 +127,7 @@ config_h.set_quoted('LIBWESTON_MODULEDIR', dir_module_libweston)
 
 backend_default = get_option('backend-default')
 if backend_default == 'auto'
-	foreach b : [ 'headless', 'x11', 'wayland', 'drm' ]
+	foreach b : [ 'headless', 'x11', 'wayland', 'drm', 'rdp' ]
 		if get_option('backend-' + b)
 			backend_default = b
 		endif

@@ -92,6 +92,13 @@ option(
 )
 
 option(
+	'wslgd',
+	type: 'boolean',
+	value: false,
+	description: 'wslgd plugin: state notify'
+)
+
+option(
 	'remoting',
 	type: 'boolean',
 	value: true,
@@ -129,6 +136,12 @@ option(
 	value: true,
 	description: 'Weston shell UI: kiosk (desktop apps)'
 )
+option(
+	'shell-rdprail',
+	type: 'boolean',
+	value: true,
+	description: 'Weston shell UI: RDP remote application shell'
+)
 
 option(
 	'desktop-shell-client-default',
@@ -155,6 +168,12 @@ option(
 	type: 'boolean',
 	value: true,
 	description: 'WebP loading support'
+)
+option(
+	'image-svg',
+	type: 'boolean',
+	value: true,
+	description: 'SVG loading support'
 )
 
 option(

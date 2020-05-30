@@ -89,6 +89,10 @@ struct weston_desktop_api {
 				    bool maximized, void *user_data);
 	void (*minimized_requested)(struct weston_desktop_surface *surface,
 				    void *user_data);
+	void (*set_window_icon)(struct weston_desktop_surface *surface,
+				int32_t width, int32_t height,
+				int32_t bpp, void *bits,
+				void *user_data);
 
 	/** Position suggestion for an Xwayland window
 	 *
@@ -125,6 +129,12 @@ struct weston_desktop_api {
 	void (*get_position)(struct weston_desktop_surface *surface,
 			     int32_t *x, int32_t *y,
 			     void *user_data);
+	/*
+	 * In contrast to above set_xwayland_position(), move_xwayland_position()
+	 * to be used to move window after mapped.
+	 */
+	void (*move_xwayland_position)(struct weston_desktop_surface *surface,
+            struct weston_coord_global pos, void *user_data);
 };
 
 void
@@ -238,6 +248,11 @@ bool
 weston_desktop_minimize_supported(struct weston_desktop *desktop);
 bool
 weston_desktop_maximize_supported(struct weston_desktop *desktop);
+
+void
+weston_desktop_api_maximized_requested(struct weston_desktop *desktop,
+				       struct weston_desktop_surface *surface,
+				       bool maximized);
 
 #ifdef __cplusplus
 }

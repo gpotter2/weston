@@ -41,6 +41,32 @@
 
 #include "shared/xalloc.h"
 
+float
+disp_get_client_scale_from_monitor(struct rdp_backend *b, const rdpMonitor *config)
+{
+	if (config->attributes.desktopScaleFactor == 0.0)
+		return 1.0f;
+
+	if (b->enable_hi_dpi_support) {
+		if (b->debug_desktop_scaling_factor)
+			return (float)b->debug_desktop_scaling_factor / 100.f;
+		else if (b->enable_fractional_hi_dpi_support)
+			return (float)config->attributes.desktopScaleFactor / 100.0f;
+		else if (b->enable_fractional_hi_dpi_roundup)
+			return (float)(int)((config->attributes.desktopScaleFactor + 50) / 100);
+		else
+			return (float)(int)(config->attributes.desktopScaleFactor / 100);
+	} else {
+		return 1.0f;
+	}
+}
+
+int
+disp_get_output_scale_from_monitor(struct rdp_backend *b, const rdpMonitor *config)
+{
+	return (int) disp_get_client_scale_from_monitor(b, config);
+}
+
 static bool
 match_primary(struct rdp_backend *rdp, rdpMonitor *a, rdpMonitor *b)
 {
@@ -326,7 +352,8 @@ rdp_head_contains(struct rdp_head *rdp_head, int32_t x, int32_t y)
 
 /* Input x/y in client space, output x/y in weston space */
 struct weston_output *
-to_weston_coordinate(RdpPeerContext *peerContext, int32_t *x, int32_t *y)
+to_weston_coordinate(RdpPeerContext *peerContext, int32_t *x, int32_t *y,
+        uint32_t *width, uint32_t *height)
 {
 	struct rdp_backend *b = peerContext->rdpBackend;
 	int sx = *x, sy = *y;
@@ -348,6 +375,10 @@ to_weston_coordinate(RdpPeerContext *peerContext, int32_t *x, int32_t *y)
 			/* scale x/y to client output space. */
 			sx *= scale;
 			sy *= scale;
+			if (width && height) {
+				*width *= scale;
+				*height *= scale;
+			}
 			/* translate x/y to offset of this output in weston space. */
 			sx += output->pos.c.x;
 			sy += output->pos.c.y;
@@ -360,4 +391,39 @@ to_weston_coordinate(RdpPeerContext *peerContext, int32_t *x, int32_t *y)
 	}
 	/* x/y is outside of any monitors. */
 	return NULL;
+}
+
+/* Input x/y in weston space, output x/y in client space */
+void
+to_client_coordinate(RdpPeerContext *peerContext, struct weston_output *output, int32_t *x, int32_t *y, uint32_t *width, uint32_t *height)
+{
+	struct rdp_backend *b = peerContext->rdpBackend;
+	int sx = *x, sy = *y;
+	struct weston_head *head_iter;
+
+	/* Pick first head from output. */
+	wl_list_for_each(head_iter, &output->head_list, output_link) {
+		struct rdp_head *head = to_rdp_head(head_iter);
+		float scale = disp_get_client_scale_from_monitor(b, &head->config);
+
+		/* translate x/y to offset from this output on weston space. */
+		sx -= output->pos.c.x;
+		sy -= output->pos.c.y;
+		/* scale x/y to client output space. */
+		sx *= scale;
+		sy *= scale;
+
+		if (width && height) {
+			*width *= scale;
+			*height *= scale;
+		}
+		/* translate x/y to offset from this output on client space. */
+		sx += head->config.x;
+		sy += head->config.y;
+		rdp_debug_verbose(b, "%s: (x:%d, y:%d) -> (sx:%d, sy:%d) at head:%s\n",
+				  __func__, *x, *y, sx, sy, head_iter->name);
+		*x = sx;
+		*y = sy;
+		return; // must be only 1 head per output.
+	}
 }

@@ -68,6 +68,12 @@ wet_process_destroy(struct wet_process *process, int status, bool call_cleanup);
 struct weston_config *
 wet_get_config(struct weston_compositor *compositor);
 
+struct wet_rdp_params *
+wet_get_rdp_params(struct weston_compositor *);
+
+void *
+wet_load_module_entrypoint(const char *name, const char *entrypoint);
+
 int
 wet_shell_init(struct weston_compositor *ec,
 	       int *argc, char *argv[]);

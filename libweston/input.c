@@ -2715,6 +2715,12 @@ notify_key(struct weston_seat *seat, const struct timespec *time, uint32_t key,
 		keyboard->grab_time = *time;
 		keyboard->grab_key = key;
 	}
+
+	if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		weston_compositor_idle_inhibit(compositor);
+	} else {
+		weston_compositor_idle_release(compositor);
+	}
 }
 
 WL_EXPORT void

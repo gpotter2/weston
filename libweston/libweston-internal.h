@@ -91,9 +91,11 @@ struct weston_renderer {
 
 	/** See weston_surface_copy_content() */
 	int (*surface_copy_content)(struct weston_surface *surface,
-				    void *target, size_t size,
+				    void *target, size_t size, size_t stride,
+                    int target_width, int target_height,
 				    int src_x, int src_y,
-				    int width, int height);
+				    int width, int height,
+                    bool y_flip, bool is_argb);
 
 	/** See weston_compositor_import_dmabuf() */
 	bool (*import_dmabuf)(struct weston_compositor *ec,

@@ -3,7 +3,7 @@ srcs_libshared = [
 	'option-parser.c',
 	'file-util.c',
 	'os-compatibility.c',
-        'process-util.c',
+    'process-util.c',
 	'hash.c',
 ]
 deps_libshared = [dep_wayland_client, dep_pixman, deps_for_libweston_users, dep_egl]
@@ -85,6 +85,19 @@ if get_option('image-webp')
 	endif
 	deps_cairo_shared += dep_webp
 	config_h.set('HAVE_WEBP', '1')
+endif
+
+if get_option('image-svg')
+    dep_librsvg = dependency(
+        'librsvg-2.0',
+        version: '>= 2.36.0',
+        required: false
+    )
+    if not dep_librsvg.found()
+        error('SVG image loading requires libsvg2 which was not found. Or, you can use \'-Dimage-svg=false\'.')
+    endif
+    deps_cairo_shared += dep_librsvg
+    config_h.set('HAVE_LIBRSVG2', '1')
 endif
 
 lib_cairo_shared = static_library(

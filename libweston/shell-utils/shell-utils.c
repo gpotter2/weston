@@ -1,6 +1,7 @@
 /*
  * Copyright 2010-2012 Intel Corporation
  * Copyright 2013 Raspberry Pi Foundation
+ * Copyright 2020 Microsoft
  * Copyright 2011-2012,2021 Collabora, Ltd.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -48,6 +49,32 @@ weston_shell_utils_get_default_output(struct weston_compositor *compositor)
 
 	return container_of(compositor->output_list.next,
 			    struct weston_output, link);
+}
+
+/**
+ * \ingroup shell-utils
+ */
+WL_EXPORT struct weston_output *
+weston_shell_utils_get_output_containing(struct weston_compositor *compositor,
+        int32_t x, int32_t y,
+        bool use_default)
+{
+	if (wl_list_empty(&compositor->output_list))
+		return NULL;
+
+	struct weston_output *output;
+	wl_list_for_each(output, &compositor->output_list, link) {
+		if (x >= output->region.extents.x1 && x < output->region.extents.x2 &&
+			y >= output->region.extents.y1 && y < output->region.extents.y2) {
+			return output;
+		}
+	}
+
+	if (use_default) {
+		return weston_shell_utils_get_default_output(compositor);
+	} else {
+		return NULL;
+	}
 }
 
 /**

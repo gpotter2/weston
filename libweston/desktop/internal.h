@@ -82,6 +82,11 @@ weston_desktop_api_minimized_requested(struct weston_desktop *desktop,
 				       struct weston_desktop_surface *surface);
 
 void
+weston_desktop_api_set_window_icon(struct weston_desktop *desktop,
+				   struct weston_desktop_surface *surface,
+				   int32_t width, int32_t height, int32_t bpp, void *bits);
+
+void
 weston_desktop_api_set_xwayland_position(struct weston_desktop *desktop,
 					 struct weston_desktop_surface *surface,
 					 struct weston_coord_global pos);
@@ -90,6 +95,11 @@ void
 weston_desktop_api_get_position(struct weston_desktop *desktop,
 				struct weston_desktop_surface *surface,
 				int32_t *x, int32_t *y);
+
+void
+weston_desktop_api_move_xwayland_position(struct weston_desktop *desktop,
+					  struct weston_desktop_surface *surface,
+					  struct weston_coord_global pos);
 
 struct weston_desktop_seat *
 weston_desktop_seat_from_seat(struct weston_seat *wseat);

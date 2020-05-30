@@ -49,6 +49,9 @@ struct weston_curtain {
 struct weston_output *
 weston_shell_utils_get_default_output(struct weston_compositor *compositor);
 
+static struct weston_output *
+weston_shell_utils_get_output_containing(struct weston_compositor *compositor, int32_t x, int32_t y, bool use_default);
+
 struct weston_output *
 weston_shell_utils_get_focused_output(struct weston_compositor *compositor);
 

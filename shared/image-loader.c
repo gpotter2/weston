@@ -49,6 +49,10 @@
 #include <webp/decode.h>
 #endif
 
+#ifdef HAVE_LIBRSVG2
+#include <librsvg/rsvg.h>
+#endif
+
 static int
 stride_for_width(int width)
 {
@@ -546,8 +550,130 @@ load_webp(FILE *fp, uint32_t image_load_flags)
 	return NULL;
 }
 
-#endif
+#endif // HAVE_WEBP
 
+#ifdef HAVE_LIBRSVG2
+
+static pixman_image_t *
+load_svg_image(const char *filename)
+{
+	pixman_image_t *pixman_image;
+
+	GError *error = NULL;
+	RsvgHandle *rsvg = NULL;
+	cairo_surface_t *surface = NULL;
+	cairo_t *cr = NULL;
+	cairo_status_t status;
+
+	rsvg = rsvg_handle_new_from_file(filename, &error);
+	if (!rsvg) {
+		fprintf(stderr, "%s: rsvg_handle_new_from_file failed %s %s\n",
+			__func__, filename, error ? error->message : "(no error message)");
+		goto Exit;
+	}
+
+    double width;
+	double height;
+    rsvg_handle_get_intrinsic_size_in_pixels(rsvg, &width, &height);
+
+	pixman_image = pixman_image_create_bits(PIXMAN_a8r8g8b8,
+			width,
+			height,
+			NULL,
+			width * 4);
+	if (!pixman_image) {
+		fprintf(stderr, "%s: pixman_image_create_bits(%fx%f) failed %s\n",
+			__func__, width, height, filename);
+		goto Exit;
+	}
+
+	surface = cairo_image_surface_create_for_data(
+			(unsigned char *)pixman_image_get_data(pixman_image),
+			CAIRO_FORMAT_ARGB32,
+			width,
+			height,
+			width * 4);
+
+	if (!surface) {
+		fprintf(stderr, "%s: cairo_image_surface_create(%fx%f) failed %s\n",
+			__func__, width, height, filename);
+		goto Exit;
+	}
+
+	cr = cairo_create(surface);
+	if (!cr) {
+		fprintf(stderr, "%s: cairo_create failed %s\n",
+			__func__, filename);
+		goto Exit;
+	}
+
+	if (!rsvg_handle_render_cairo(rsvg, cr)) {
+		fprintf(stderr, "%s: rsvg_handle_render_cairo failed %s\n",
+			__func__, filename);
+		goto Exit;
+	}
+
+	pixman_image_ref(pixman_image);
+
+Exit:
+	status = cairo_status(cr);
+	if (status != CAIRO_STATUS_SUCCESS) {
+		fprintf(stderr, "%s: cairo status error %s\n",
+			__func__, cairo_status_to_string(status));
+	}
+
+	if (cr)
+		cairo_destroy(cr);
+
+	if (surface)
+		cairo_surface_destroy(surface);
+
+	if (pixman_image) {
+		if (pixman_image_unref(pixman_image))
+			pixman_image = NULL;
+	}
+
+	if (rsvg)
+		g_object_unref(rsvg);
+
+	if (error)
+		g_error_free(error);
+
+	return pixman_image;
+}
+
+static struct weston_image *
+load_svg(const char *filename, uint32_t image_load_flags)
+{
+	struct weston_image *image;
+	pixman_image_t *pixman_image;
+    
+    if (image_load_flags & WESTON_IMAGE_LOAD_ICC)
+		fprintf(stderr, "We still don't support reading ICC profile from SVG\n");
+
+	if (!(image_load_flags & WESTON_IMAGE_LOAD_IMAGE))
+		return NULL;
+
+	pixman_image = load_svg_image(filename);
+	if (!pixman_image)
+	    return NULL;
+
+	image = xzalloc(sizeof(*image));
+	image->pixman_image = pixman_image;
+
+	return image;
+}
+
+#else
+
+static struct weston_image *
+load_svg(const char *filename, uint32_t image_load_flags)
+{
+	fprintf(stderr, "SVG support disabled at compile-time\n");
+	return NULL;
+}
+
+#endif // HAVE_LIBRSVG2
 
 struct image_loader {
 	unsigned char header[4];
@@ -583,10 +709,19 @@ weston_image_load(const char *filename, uint32_t image_load_flags)
 	struct weston_image *image = NULL;
 	unsigned char header[4];
 	FILE *fp;
-	unsigned int i;
+	unsigned int i, filenamelen;
 
 	if (!filename || !*filename)
 		return NULL;
+
+    // Special case for svg (no header): trust the .svg extension
+    filenamelen = strlen(filename);
+    if (filenamelen > 4) {
+        char *ext = &filename[filenamelen - 4];
+        if (strcasecmp(ext, ".svg") == 0) {
+            return load_svg(filename, image_load_flags);
+        }
+    }
 
 	fp = fopen(filename, "rb");
 	if (!fp) {

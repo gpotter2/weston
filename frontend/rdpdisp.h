@@ -1,6 +1,5 @@
 /*
- * Copyright © 2008 Kristian Høgsberg
- * Copyright 2022 Collabora, Ltd.
+ * Copyright © 2020 Microsoft
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,43 +23,19 @@
  * SOFTWARE.
  */
 
-#ifndef WESTON_XALLOC_H
-#define WESTON_XALLOC_H
+#ifndef RDP_DISP_H
+#define RDP_DISP_H
 
-#ifdef  __cplusplus
-extern "C" {
+struct wet_rdp_params {
+	bool enable_hi_dpi_support;
+	bool enable_fractional_hi_dpi_support;
+	bool enable_fractional_hi_dpi_roundup;
+	int debug_desktop_scaling_factor;
+	int default_width;
+	int default_height;
+};
+
+void
+disp_monitor_validate_and_compute_layout(struct weston_compositor *ec);
+
 #endif
-
-#include <errno.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-
-static inline void *
-abort_oom_if_null(void *p)
-{
-	static const char oommsg[] = ": out of memory\n";
-	size_t written __attribute__((unused));
-
-	if (p)
-		return p;
-
-	written = write(STDERR_FILENO, program_invocation_short_name,
-		        strlen(program_invocation_short_name));
-	written = write(STDERR_FILENO, oommsg, strlen(oommsg));
-
-	abort();
-}
-
-#define xmalloc(s) (abort_oom_if_null(malloc(s)))
-#define xzalloc(s) (abort_oom_if_null(calloc(1, s)))
-#define xcalloc(n, s) (abort_oom_if_null(calloc(n, s)))
-#define xstrdup(s) (abort_oom_if_null(strdup(s)))
-#define xrealloc(p, s) (abort_oom_if_null(realloc(p, s)))
-
-#ifdef  __cplusplus
-}
-#endif
-
-#endif /* WESTON_XALLOC_H */

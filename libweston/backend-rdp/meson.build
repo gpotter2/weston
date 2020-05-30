@@ -37,17 +37,37 @@ else
 	error('RDP-backend requires freerdp3 >= 3.0.0 or freerdp2 >= 2.3.0 which was not found. Or, you can use \'-Dbackend-rdp=false\'.')
 endif
 
+dep_rdpapplist = dependency('rdpapplist', version: '>= 2.0.0', required: false)
+if dep_rdpapplist.found()
+	config_h.set('HAVE_FREERDP_RDPAPPLIST_H', '1')
+endif
+
+if cc.has_header('freerdp/channels/gfxredir.h', dependencies: dep_frdp)
+	config_h.set('HAVE_FREERDP_GFXREDIR_H', '1')
+endif
+
+if cc.has_member(
+	'rdpsnd_server_context', 'use_dynamic_virtual_channel',
+	dependencies : dep_frdp,
+	prefix : '#include <freerdp/server/rdpsnd.h>'
+)
+	config_h.set('HAVE_RDPSND_DYNAMIC_VIRTUAL_CHANNEL', '1')
+endif
+
 deps_rdp = [
-        dep_libweston_private,
         dep_frdp,
         dep_frdp_server,
-        dep_wpr,
         dep_libdrm_headers,
+        dep_libshared,
+        dep_libweston_private,
+        dep_rdpapplist,
+        dep_wpr,
 ]
 srcs_rdp = [
         'rdp.c',
         'rdpclip.c',
         'rdpdisp.c',
+        'rdprail.c',
         'rdputil.c',
 ]
 

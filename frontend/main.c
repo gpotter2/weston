@@ -72,6 +72,8 @@
 #include <libweston/remoting-plugin.h>
 #include <libweston/pipewire-plugin.h>
 
+#include <rdpdisp.h>
+
 #define WINDOW_TITLE "Weston Compositor"
 /* flight recorder size (in bytes) */
 #define DEFAULT_FLIGHT_REC_SIZE (5 * 1024 * 1024)
@@ -156,6 +158,7 @@ struct wet_compositor {
 	struct wl_listener screenshot_auth;
 	struct wl_listener output_created_listener;
 	enum require_outputs require_outputs;
+	struct wet_rdp_params rdp_params;
 };
 
 static FILE *weston_logfile = NULL;
@@ -774,6 +777,7 @@ usage(int error_code)
 		"Options for rdp:\n\n"
 		"  --width=WIDTH\t\tWidth of desktop\n"
 		"  --height=HEIGHT\tHeight of desktop\n"
+		"  --scale=SCALE\t\tScale factor of output\n"
 		"  --env-socket\t\tUse socket defined in RDP_FD env variable as peer connection\n"
 		"  --external-listener-fd=FD\tUse socket as listener connection\n"
 		"  --address=ADDR\tThe address to bind\n"
@@ -989,6 +993,8 @@ wet_load_shell(struct weston_compositor *compositor,
 	else
 		str_printf(&name, "%s-shell.so", _name);
 	assert(name);
+	/* We save the shell module name to differentiate desktop-shell from rdprail-shell */
+	compositor->shell_module_name = strdup(name);
 
 	shell_init = weston_load_module(name, "wet_shell_init", MODULEDIR);
 	free(name);
@@ -3669,6 +3675,18 @@ weston_rdp_backend_config_init(struct weston_rdp_backend_config *config)
 	config->force_no_compression = 0;
 	config->remotefx_codec = true;
 	config->refresh_rate = RDP_DEFAULT_FREQ;
+	config->rail_config.use_rdpapplist = false;
+	config->rail_config.use_shared_memory = false;
+	config->rail_config.enable_hi_dpi_support = false;
+	config->rail_config.enable_fractional_hi_dpi_support = false;
+	config->rail_config.enable_fractional_hi_dpi_roundup = false;
+	config->rail_config.debug_desktop_scaling_factor = 0;
+	config->rail_config.enable_window_zorder_sync = false;
+	config->rail_config.enable_window_snap_arrange = false;
+	config->rail_config.enable_window_shadow_remoting = false;
+	config->rail_config.enable_distro_name_title = false;
+	config->rail_config.enable_copy_warning_title = false;
+	config->rail_config.enable_display_power_by_screenupdate = false;
 }
 
 static int
@@ -3699,7 +3717,7 @@ rdp_backend_output_configure(struct weston_output *output)
 
 	width = config.width;
 	height = config.height;
-	scale = config.desktop_scale / 100;
+	scale = config.attributes.desktopScaleFactor / 100;
 
 	/* If these are invalid, the backend is expecting
 	 * us to provide defaults.
@@ -3729,6 +3747,78 @@ rdp_backend_output_configure(struct weston_output *output)
 	weston_log("rdp_backend_output_configure.. Done\n");
 
 	return 0;
+}
+
+static bool
+read_rdp_config_bool(char *config_name, bool default_value)
+{
+	char *s;
+
+	s = getenv(config_name);
+	if (s) {
+		if (strcmp(s, "true") == 0)
+			return true;
+		else if (strcmp(s, "false") == 0)
+			return false;
+		else if (strcmp(s, "1") == 0)
+			return true;
+		else if (strcmp(s, "0") == 0)
+			return false;
+	}
+
+	return default_value;
+}
+
+static int
+read_rdp_config_int(char *config_name, int default_value)
+{
+	char *s;
+	int i;
+
+	s = getenv(config_name);
+	if (s) {
+		if (safe_strtoint(s, &i))
+			return i;
+	}
+
+	return default_value;
+}
+
+struct wet_rdp_params *
+wet_get_rdp_params(struct weston_compositor *ec)
+{
+	struct wet_compositor *wet = to_wet_compositor(ec);
+
+	return &wet->rdp_params;
+}
+
+static void
+rdp_heads_changed(struct wl_listener *listener, void *arg)
+{
+	struct weston_compositor *compositor = arg;
+	struct wet_compositor *wet = to_wet_compositor(compositor);
+	struct wet_rdp_params *rdp_params = wet_get_rdp_params(compositor);
+	struct weston_head *head = NULL;
+
+	while ((head = weston_compositor_iterate_heads(compositor, head))) {
+		if (!head->output) {
+			struct weston_output *out;
+
+			out = weston_compositor_create_output(wet->compositor, head,
+								 head->name);
+
+			wet_head_tracker_create(wet, head);
+			weston_output_attach_head(out, head);
+		}
+	}
+
+	disp_monitor_validate_and_compute_layout(compositor);
+
+	while ((head = weston_compositor_iterate_heads(compositor, head))) {
+		if (!head->output->enabled)
+			weston_output_enable(head->output);
+		weston_head_reset_device_changed(head);
+	}
 }
 
 static int
@@ -3779,8 +3869,68 @@ load_rdp_backend(struct weston_compositor *c,
 	weston_config_section_get_string(section, "tls-key",
 					 &config.server_key, config.server_key);
 
+	/* certain configurations are read from environment variables */
+
+	config.rail_config.use_rdpapplist = read_rdp_config_bool("WESTON_RDP_APPLIST", false);
+	config.rail_config.use_shared_memory = read_rdp_config_bool("WESTON_RDP_SHARED_MEMORY", false);
+
+	/* Configure HI-DPI scaling */
+	config.rail_config.enable_hi_dpi_support = read_rdp_config_bool("WESTON_RDP_HI_DPI_SCALING", true);
+	if (config.rail_config.enable_hi_dpi_support) {
+		/* Disable by default for now. */
+		config.rail_config.enable_fractional_hi_dpi_support =
+			read_rdp_config_bool("WESTON_RDP_FRACTIONAL_HI_DPI_SCALING", false);
+	} else {
+		config.rail_config.enable_fractional_hi_dpi_support = false;
+	}
+	/* if fractional support is enabled, no round up */
+	if (config.rail_config.enable_fractional_hi_dpi_support) {
+		config.rail_config.enable_fractional_hi_dpi_roundup = false;
+	} else {
+		config.rail_config.enable_fractional_hi_dpi_roundup =
+			read_rdp_config_bool("WESTON_RDP_FRACTIONAL_HI_DPI_SCALING_ROUNDUP", false);
+	}
+	if (config.rail_config.enable_hi_dpi_support) {
+		config.rail_config.debug_desktop_scaling_factor =
+			read_rdp_config_int("WESTON_RDP_DEBUG_DESKTOP_SCALING_FACTOR", 0);
+		if (config.rail_config.debug_desktop_scaling_factor != 0) {
+			if (config.rail_config.debug_desktop_scaling_factor < 100 ||
+			    config.rail_config.debug_desktop_scaling_factor > 500) {
+				config.rail_config.debug_desktop_scaling_factor = 0;
+			}
+		}
+	} else {
+		config.rail_config.debug_desktop_scaling_factor = 0;
+	}
+
+    struct wet_rdp_params *rdp_params = wet_get_rdp_params(c);
+	rdp_params->enable_hi_dpi_support = config.rail_config.enable_hi_dpi_support;
+	rdp_params->enable_fractional_hi_dpi_support = config.rail_config.enable_fractional_hi_dpi_support;
+	rdp_params->enable_fractional_hi_dpi_roundup = config.rail_config.enable_fractional_hi_dpi_roundup;
+	rdp_params->debug_desktop_scaling_factor = config.rail_config.debug_desktop_scaling_factor;
+	rdp_params->default_width = parsed_options->width;
+	rdp_params->default_height = parsed_options->height;
+
+	config.rail_config.enable_window_zorder_sync = read_rdp_config_bool(
+            "WESTON_RDP_WINDOW_ZORDER_SYNC", true);
+	config.rail_config.enable_window_snap_arrange = read_rdp_config_bool(
+            "WESTON_RDP_WINDOW_SNAP_ARRANGE", true);
+	config.rail_config.enable_window_shadow_remoting = read_rdp_config_bool(
+            "WESTON_RDP_WINDOW_SHADOW_REMOTING", true);
+	config.rail_config.enable_display_power_by_screenupdate = read_rdp_config_bool(
+            "WESTON_RDP_DISPLAY_POWER_BY_SCREENUPDATE", false);
+	config.rail_config.enable_distro_name_title = read_rdp_config_bool(
+            "WESTON_RDP_APPEND_DISTRONAME_TITLE", true);
+#if defined(__arm__) || defined(__aarch64__)
+	config.rail_config.enable_copy_warning_title = read_rdp_config_bool(
+            "WESTON_RDP_COPY_WARNING_TITLE", false);
+#else
+	config.rail_config.enable_copy_warning_title = read_rdp_config_bool(
+            "WESTON_RDP_COPY_WARNING_TITLE", true);
+#endif
+
 	wb = wet_compositor_load_backend(c, WESTON_BACKEND_RDP, &config.base,
-					 simple_heads_changed,
+					 simple_heads_changed, //rdp_heads_changed,
 					 rdp_backend_output_configure);
 
 	free(config.bind_address);
@@ -4429,9 +4579,11 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	char *option_modules = NULL;
 	char *log = NULL;
 	char *log_scopes = NULL;
+	char *log_scopes_env = NULL;
 	char *flight_rec_scopes = NULL;
 	char *server_socket = NULL;
 	char *require_outputs = NULL;
+	char *idle_time_env = NULL;
 	int32_t idle_time = -1;
 	int32_t help = 0;
 	char *socket_name = NULL;
@@ -4523,6 +4675,10 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 
 	weston_log_subscribe_to_scopes(log_ctx, logger, flight_rec,
 				       log_scopes, flight_rec_scopes);
+
+	log_scopes_env = getenv("WESTON_LOG_SCOPES");
+	if (log_scopes_env)
+		weston_log_setup_scopes(log_ctx, logger, log_scopes_env);
 
 	weston_log("%s\n"
 		   STAMP_SPACE "%s\n"
@@ -4675,6 +4831,9 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	if (wet.init_failed)
 		goto out;
 
+	idle_time_env = getenv("WESTON_IDLE_TIME");
+	if (!idle_time_env || !safe_strtoint(idle_time_env, &idle_time))
+		idle_time = -1;
 	if (idle_time < 0)
 		weston_config_section_get_int(section, "idle-time", &idle_time, -1);
 	if (idle_time < 0)
@@ -4767,7 +4926,8 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 			goto out;
 	}
 
-	weston_compositor_wake(wet.compositor);
+	/* Until RDP connection is established, keep compositor sleep state */
+	weston_compositor_sleep(wet.compositor);
 
 	if (argc > 1) {
 		if (execute_command(&wet, argc, argv) < 0)
