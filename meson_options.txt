@@ -92,6 +92,13 @@ option(
 )
 
 option(
+	'wslgd',
+	type: 'boolean',
+	value: false,
+	description: 'wslgd plugin: state notify'
+)
+
+option(
 	'remoting',
 	type: 'boolean',
 	value: true,
@@ -128,6 +135,12 @@ option(
 	type: 'boolean',
 	value: true,
 	description: 'Weston shell UI: kiosk (desktop apps)'
+)
+option(
+	'shell-rdprail',
+	type: 'boolean',
+	value: true,
+	description: 'Weston shell UI: RDP remote application shell'
 )
 
 option(

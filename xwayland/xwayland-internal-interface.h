@@ -51,6 +51,8 @@ struct weston_desktop_xwayland_interface {
 			       struct weston_output *output);
 	void (*set_xwayland)(struct weston_desktop_xwayland_surface *shsurf,
 			     struct weston_coord_global coord);
+	void (*move_position)(struct weston_desktop_xwayland_surface *shsurf,
+	             struct weston_coord_global pos);
 	int (*move)(struct weston_desktop_xwayland_surface *shsurf,
 		    struct weston_pointer *pointer);
 	int (*resize)(struct weston_desktop_xwayland_surface *shsurf,
@@ -65,7 +67,8 @@ struct weston_desktop_xwayland_interface {
 	void (*set_pid)(struct weston_desktop_xwayland_surface *shsurf, pid_t pid);
 	void (*get_position)(struct weston_desktop_xwayland_surface *surface,
 			     int32_t *x, int32_t *y);
-
+	void (*set_window_icon)(struct weston_desktop_xwayland_surface *surface,
+			        int32_t width, int32_t height, int32_t bpp, void *bits);
 };
 
 #endif

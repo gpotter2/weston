@@ -3,7 +3,7 @@ srcs_libshared = [
 	'option-parser.c',
 	'file-util.c',
 	'os-compatibility.c',
-        'process-util.c',
+    'process-util.c',
 	'hash.c',
 ]
 deps_libshared = [dep_wayland_client, dep_pixman, deps_for_libweston_users, dep_egl]

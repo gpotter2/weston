@@ -2551,8 +2551,11 @@ desktop_surface_set_parent(struct weston_desktop_surface *desktop_surface,
 
 	if (parent) {
 		shsurf_parent = weston_desktop_surface_get_user_data(parent);
-		wl_list_insert(shsurf_parent->children_list.prev,
-			       &shsurf->children_link);
+		if (shsurf_parent)
+			wl_list_insert(shsurf_parent->children_list.prev,
+				       &shsurf->children_link);
+		else
+			wl_list_init(&shsurf->children_link);
 	} else {
 		wl_list_init(&shsurf->children_link);
 	}
@@ -2737,13 +2740,14 @@ desktop_surface_set_xwayland_position(struct weston_desktop_surface *surface,
 
 static void
 desktop_surface_get_position(struct weston_desktop_surface *surface,
-			     int32_t *x, int32_t *y,
+                 int32_t *x, int32_t *y,
 			     void *shell_)
 {
 	struct shell_surface *shsurf = weston_desktop_surface_get_user_data(surface);
 
 	*x = shsurf->view->geometry.pos_offset.x;
 	*y = shsurf->view->geometry.pos_offset.y;
+
 }
 
 static const struct weston_desktop_api shell_desktop_api = {

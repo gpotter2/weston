@@ -326,7 +326,8 @@ rdp_head_contains(struct rdp_head *rdp_head, int32_t x, int32_t y)
 
 /* Input x/y in client space, output x/y in weston space */
 struct weston_output *
-to_weston_coordinate(RdpPeerContext *peerContext, int32_t *x, int32_t *y)
+to_weston_coordinate(RdpPeerContext *peerContext, int32_t *x, int32_t *y,
+        uint32_t *width, uint32_t *height)
 {
 	struct rdp_backend *b = peerContext->rdpBackend;
 	int sx = *x, sy = *y;
@@ -348,6 +349,10 @@ to_weston_coordinate(RdpPeerContext *peerContext, int32_t *x, int32_t *y)
 			/* scale x/y to client output space. */
 			sx *= scale;
 			sy *= scale;
+            if (width && height) {
+				*width *= scale;
+				*height *= scale;
+			}
 			/* translate x/y to offset of this output in weston space. */
 			sx += output->pos.c.x;
 			sy += output->pos.c.y;
