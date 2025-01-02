@@ -1,7 +1,6 @@
 srcs_weston = [
 	git_version_h,
 	'main.c',
-	'rdpdisp.c',
 	'text-backend.c',
 	'config-helpers.c',
 	'weston-screenshooter.c',

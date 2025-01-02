@@ -72,8 +72,6 @@
 #include <libweston/remoting-plugin.h>
 #include <libweston/pipewire-plugin.h>
 
-#include <rdpdisp.h>
-
 #define WINDOW_TITLE "Weston Compositor"
 /* flight recorder size (in bytes) */
 #define DEFAULT_FLIGHT_REC_SIZE (5 * 1024 * 1024)
@@ -158,7 +156,6 @@ struct wet_compositor {
 	struct wl_listener screenshot_auth;
 	struct wl_listener output_created_listener;
 	enum require_outputs require_outputs;
-	struct wet_rdp_params rdp_params;
 };
 
 static FILE *weston_logfile = NULL;
@@ -3784,43 +3781,6 @@ read_rdp_config_int(char *config_name, int default_value)
 	return default_value;
 }
 
-struct wet_rdp_params *
-wet_get_rdp_params(struct weston_compositor *ec)
-{
-	struct wet_compositor *wet = to_wet_compositor(ec);
-
-	return &wet->rdp_params;
-}
-
-static void
-rdp_heads_changed(struct wl_listener *listener, void *arg)
-{
-	struct weston_compositor *compositor = arg;
-	struct wet_compositor *wet = to_wet_compositor(compositor);
-	struct wet_rdp_params *rdp_params = wet_get_rdp_params(compositor);
-	struct weston_head *head = NULL;
-
-	while ((head = weston_compositor_iterate_heads(compositor, head))) {
-		if (!head->output) {
-			struct weston_output *out;
-
-			out = weston_compositor_create_output(wet->compositor, head,
-								 head->name);
-
-			wet_head_tracker_create(wet, head);
-			weston_output_attach_head(out, head);
-		}
-	}
-
-	disp_monitor_validate_and_compute_layout(compositor);
-
-	while ((head = weston_compositor_iterate_heads(compositor, head))) {
-		if (!head->output->enabled)
-			weston_output_enable(head->output);
-		weston_head_reset_device_changed(head);
-	}
-}
-
 static int
 load_rdp_backend(struct weston_compositor *c,
 		int *argc, char *argv[], struct weston_config *wc,
@@ -3903,14 +3863,6 @@ load_rdp_backend(struct weston_compositor *c,
 		config.rail_config.debug_desktop_scaling_factor = 0;
 	}
 
-    struct wet_rdp_params *rdp_params = wet_get_rdp_params(c);
-	rdp_params->enable_hi_dpi_support = config.rail_config.enable_hi_dpi_support;
-	rdp_params->enable_fractional_hi_dpi_support = config.rail_config.enable_fractional_hi_dpi_support;
-	rdp_params->enable_fractional_hi_dpi_roundup = config.rail_config.enable_fractional_hi_dpi_roundup;
-	rdp_params->debug_desktop_scaling_factor = config.rail_config.debug_desktop_scaling_factor;
-	rdp_params->default_width = parsed_options->width;
-	rdp_params->default_height = parsed_options->height;
-
 	config.rail_config.enable_window_zorder_sync = read_rdp_config_bool(
             "WESTON_RDP_WINDOW_ZORDER_SYNC", true);
 	config.rail_config.enable_window_snap_arrange = read_rdp_config_bool(
@@ -3930,7 +3882,7 @@ load_rdp_backend(struct weston_compositor *c,
 #endif
 
 	wb = wet_compositor_load_backend(c, WESTON_BACKEND_RDP, &config.base,
-					 simple_heads_changed, //rdp_heads_changed,
+					 simple_heads_changed,
 					 rdp_backend_output_configure);
 
 	free(config.bind_address);
